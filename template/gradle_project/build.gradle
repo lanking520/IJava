@@ -1,0 +1,22 @@
+plugins {
+    id 'java'
+}
+
+group = 'ai.djl.examples'
+version = '0.0.1-SNAPSHOT'
+
+configurations {
+    exclusion
+}
+
+configure(this) {
+    defaultTasks "jar"
+}
+
+jar {
+    from {
+        (configurations.runtimeClasspath - configurations.exclusion).collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+}
