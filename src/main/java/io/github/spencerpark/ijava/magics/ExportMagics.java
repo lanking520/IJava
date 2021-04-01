@@ -2,15 +2,14 @@ package io.github.spencerpark.ijava.magics;
 
 import io.github.spencerpark.ijava.execution.CodeEvaluator;
 import io.github.spencerpark.ijava.magics.utils.ZipUtils;
-import io.github.spencerpark.ijava.recorder.ClassRecorder;
-import io.github.spencerpark.ijava.recorder.DependencyRecorder;
-import io.github.spencerpark.ijava.recorder.ImportRecorder;
-import io.github.spencerpark.ijava.runtime.Recorder;
+import io.github.spencerpark.ijava.runtime.CodeRecorder;
 import io.github.spencerpark.jupyter.kernel.magic.registry.LineMagic;
 import org.codehaus.plexus.util.FileUtils;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.List;
@@ -19,24 +18,11 @@ import java.util.StringJoiner;
 
 public class ExportMagics {
 
-    ImportRecorder ir;
-    ClassRecorder cr;
-    DependencyRecorder dr;
+    CodeRecorder recorder;
     CodeEvaluator eva;
 
-    public ExportMagics(List<Recorder> recorders, CodeEvaluator evaluator) {
-        for (Recorder recorder : recorders) {
-            if (recorder instanceof ImportRecorder) {
-                ir = (ImportRecorder) recorder;
-            } else if (recorder instanceof ClassRecorder) {
-                cr = (ClassRecorder) recorder;
-            } else if (recorder instanceof DependencyRecorder) {
-                dr = (DependencyRecorder) recorder;
-            }
-        }
-        if (ir == null || cr == null || dr == null) {
-            throw new RuntimeException("Recorder not registered!");
-        }
+    public ExportMagics(CodeRecorder recorder, CodeEvaluator evaluator) {
+        this.recorder = recorder;
         this.eva = evaluator;
     }
 
@@ -45,14 +31,16 @@ public class ExportMagics {
         if (args.size() != 1) {
             throw new RuntimeException("Require single name input");
         }
-        Path src = Paths.get("template/gradle_project");
         Path dest;
         try {
-            dest = Files.createTempDirectory("template");
-            FileUtils.copyDirectoryStructure(src.toFile(), dest.toFile());
+            dest = Files.createTempDirectory("tmp");
         } catch (IOException e) {
             throw new RuntimeException("Create temp dir failed");
         }
+        // download template
+        String url = "https://alpha-djl-demos.s3.amazonaws.com/temp/template.zip";
+        ZipUtils.unzip(new URL(url).openStream(), dest);
+        dest = dest.resolve("template");
         System.out.println("Start gathering parameters...");
         exportArtifact(args.get(0), dest);
         System.out.println("Template created in: " + dest.toString());
@@ -68,7 +56,7 @@ public class ExportMagics {
     private void exportArtifact(String modelName, Path dest) {
         try {
             eva.eval("import java.nio.file.*;");
-            ir.parse("import java.nio.file.*;");
+            recorder.parse("import java.nio.file.*;");
             String code = modelName + ".save(Paths.get(\"" + dest.toAbsolutePath().toString() + "\"), \"exported\")";
             System.out.println(code);
             eva.eval(code);
@@ -83,8 +71,10 @@ public class ExportMagics {
             Files.createDirectories(dir);
             BufferedWriter writer = Files.newBufferedWriter(dir.resolve("Export.java"));
             writer.write("package ai.djl.examples;\n");
-            writer.write(String.join("\n", ir.getContent()));
-            writer.write("\n" + String.join("\n", cr.getContent()));
+            writer.write(String.join("\n", recorder.getImports()));
+            writer.write("\nclass Export {\n");
+            writer.write("\npublic static " + String.join("\npublic static ", recorder.getClasses().values()));
+            writer.write("\n}");
             writer.close();
         } catch (IOException e) {
             throw new RuntimeException("cannot write to file export.java", e);
@@ -97,7 +87,7 @@ public class ExportMagics {
             StringJoiner repo = new StringJoiner("\n");
             deps.add("\ndependencies {");
             repo.add("\nrepositories {");
-            for (String line : dr.getContent()) {
+            for (String line : recorder.getMavenDeps()) {
                 String[] splitted = line.split("\\s+");
                 if(splitted.length == 1) {
                     String depName = splitted[0];
@@ -135,10 +125,11 @@ public class ExportMagics {
 
     private Path zipContent(Path dest) throws IOException {
         String targetFile = "exported-0000.params";
+        String jarFile = "template-0.0.1-SNAPSHOT.jar";
         Path dir = Files.createDirectory(dest.resolve("exported"));
         Files.copy(dest.resolve(targetFile), dir.resolve(targetFile));
-        // TODO: add jar to the zip
-        Path zipFile = dest.resolve("exported.zip");
+        Files.copy(dest.resolve("build/libs/" + jarFile), dir.resolve(jarFile));
+        Path zipFile = Paths.get("").resolve("exported.zip");
         ZipUtils.zip(dir, zipFile, true);
         return zipFile;
     }

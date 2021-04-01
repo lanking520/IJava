@@ -28,10 +28,7 @@ import io.github.spencerpark.ijava.magics.ClasspathMagics;
 import io.github.spencerpark.ijava.magics.ExecMagics;
 import io.github.spencerpark.ijava.magics.ExportMagics;
 import io.github.spencerpark.ijava.magics.MavenResolver;
-import io.github.spencerpark.ijava.recorder.ClassRecorder;
-import io.github.spencerpark.ijava.recorder.DependencyRecorder;
-import io.github.spencerpark.ijava.recorder.ImportRecorder;
-import io.github.spencerpark.ijava.runtime.Recorder;
+import io.github.spencerpark.ijava.runtime.CodeRecorder;
 import io.github.spencerpark.jupyter.channels.JupyterSocket;
 import io.github.spencerpark.jupyter.kernel.BaseKernel;
 import io.github.spencerpark.jupyter.kernel.LanguageInfo;
@@ -77,7 +74,7 @@ public class JavaKernel extends BaseKernel {
 
     private final MagicsSourceTransformer magicsTransformer;
     private final Magics magics;
-    private final List<Recorder> recorders;
+    private final CodeRecorder recorder;
 
     private final LanguageInfo languageInfo;
     private final String banner;
@@ -98,11 +95,7 @@ public class JavaKernel extends BaseKernel {
                 .sysStdin()
                 .build();
         this.mavenResolver = new MavenResolver(this::addToClasspath);
-
-        this.recorders = new ArrayList<>();
-        this.recorders.add(new ImportRecorder());
-        this.recorders.add(new ClassRecorder());
-        this.recorders.add(new DependencyRecorder());
+        this.recorder = new CodeRecorder();
 
         this.magicsTransformer = new MagicsSourceTransformer();
         this.magics = new Magics();
@@ -110,7 +103,7 @@ public class JavaKernel extends BaseKernel {
         this.magics.registerMagics(new ClasspathMagics(this::addToClasspath));
         this.magics.registerMagics(new Load(List.of(".jsh", ".jshell", ".java", ".ijava"), this::eval));
         this.magics.registerMagics(new ExecMagics());
-        this.magics.registerMagics(new ExportMagics(recorders, this.evaluator));
+        this.magics.registerMagics(new ExportMagics(recorder, this.evaluator));
 
         this.languageInfo = new LanguageInfo.Builder("Java")
                 .version(Runtime.version().toString())
@@ -288,8 +281,7 @@ public class JavaKernel extends BaseKernel {
     }
 
     public Object evalRaw(String expr) throws Exception {
-        String finalExpr = expr;
-        this.recorders.parallelStream().forEach(recorder -> recorder.parse(finalExpr));
+        recorder.parse(expr);
         expr = this.magicsTransformer.transformMagics(expr);
 
         return this.evaluator.eval(expr);

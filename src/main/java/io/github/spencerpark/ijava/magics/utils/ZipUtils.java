@@ -42,6 +42,10 @@ public final class ZipUtils {
                 }
                 Files.createDirectories(parentFile);
                 Files.copy(zis, file, StandardCopyOption.REPLACE_EXISTING);
+                File filePerm = file.toFile();
+                filePerm.setExecutable(true);
+                filePerm.setWritable(true);
+                filePerm.setReadable(true);
             }
         }
     }
