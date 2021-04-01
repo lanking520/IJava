@@ -4,11 +4,9 @@ import io.github.spencerpark.ijava.execution.CodeEvaluator;
 import io.github.spencerpark.ijava.magics.utils.ZipUtils;
 import io.github.spencerpark.ijava.runtime.CodeRecorder;
 import io.github.spencerpark.jupyter.kernel.magic.registry.LineMagic;
-import org.codehaus.plexus.util.FileUtils;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
